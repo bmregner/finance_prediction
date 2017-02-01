@@ -16,34 +16,33 @@ modeldict={'lasso':Lasso, 'ridge':Ridge, 'logreg':LogisticRegression,
  'svreg':SVR,'svclass':SVC, 'mlpreg':MLPRegressor,'mlpclass':MLPClassifier}
 
 
-def scores(y,yhat,thres):
-    score=[0,0,0,0]
-    for ii in zip(yhat,y):
-        temp=2*np.ceil(ii[0]-thres)-ii[1]
-        for jj in temp:
-            score[int(jj)]+=1
-    fp=score[2]
-    fn=score[-1]
-    tp=score[1]
-    tn=score[0]
-    #print(fp,fn,tp,tn)
-    if fn==0:
-        rec=1.
-    else:
-        rec=tp/(tp+fn)
-    if fp==0:
-        prec=1.
-    else:
-        prec=tp/(tp+fp)
-    if prec==0. and rec==0.:
-        f1=0.
-    else:
-        f1=2*rec*prec/(rec+prec)
-    if fp+fn==0:
-        ji=1.
-    else:
-        ji=tp/(fp+fn+tp)
-    return rec,prec,f1,ji
+def scores(y_ground_arr,y_pred_arr,class_thresholds):
+	scores_arr=[0,0,0,0]
+	for y_ground_pred in zip(y_pred_arr,y_ground_arr):
+		temp=2*np.ceil(y_ground_pred[0]-class_thresholds)-y_ground_pred[1]
+		for jj in temp:
+			scores_arr[int(jj)]+=1
+	false_pos=scores_arr[2]
+	false_neg=scores_arr[-1]
+	true_pos=scores_arr[1]
+	true_neg=scores_arr[0]
+	if false_neg==0:
+		recall=1.
+	else:
+		recall=true_pos/(true_pos+false_neg)
+	if false_pos==0:
+		precision=1.
+	else:
+		precision=true_pos/(true_pos+false_pos)
+	if precision==0. and recall==0.:
+		f1score=0.
+	else:
+		f1score=2*recall*precision/(recall+precision)
+	if (false_pos+false_neg)==0:
+		jaccard_index=1.
+	else:
+		jaccard_index=true_pos/(false_pos+false_neg+true_pos)
+	return recall,precision,f1score,jaccard_index
 
 class StockPrediction:
 
