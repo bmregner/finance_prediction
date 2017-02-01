@@ -187,6 +187,7 @@ class StockPrediction:
 		return
 
 	def kfold_test_reg(self,dataset_id,regressor,parm):
+		regressor=modeldict[regressor]
 		if isinstance(dataset_id,int):
 			dataset_name=self.dataset_names[dataset_id]
 		else:
@@ -229,6 +230,7 @@ class StockPrediction:
 
 
 	def kfold_val_class(self,classifier,parm,seed,thres):
+		classifier=modeldict[classifier]
 		if isinstance(dataset_id,int):
 			dataset_name=self.dataset_names[dataset_id]
 		else:
@@ -267,6 +269,7 @@ class StockPrediction:
 		return
 
 	def kfold_test_class(self,dataset_id,classifier,parm,thres):
+		classifier=modeldict[classifier]
 		if isinstance(dataset_id,int):
 			dataset_name=self.dataset_names[dataset_id]
 		else:
@@ -297,7 +300,7 @@ class StockPrediction:
 		else:
 			print('houston, we have a unknown model problem')
 			return
-            
+
 		model.fit(x_trainval,y_trainval)
 
 		scores_test=np.array(scores(y_test,model.predict(x_test),[thres])[:3])
