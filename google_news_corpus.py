@@ -7,7 +7,7 @@ corpus_dir = '/home/daisyz/Dropbox/finance_prediction/data'
 ex = NewsCorpusGenerator(corpus_dir,'file')
 
 # Retrieve 50 links related to the search term dogs and assign a category of Pet to the retrieved links
-date = '1-30-17'
+date = '1-31-17'
 tickers = ['AAPL', 'NFLX', 'FB', 'TSLA', 'ORCL']
 folder = ['Apple Inc '+date, 'Netflix '+date, 'Facebook '+date, 'Tesla '+date, 'Oracle '+date]
 
