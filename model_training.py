@@ -1,6 +1,7 @@
 #this module creates datasets and trains models
 import re
 import numpy as np
+import csv
 from sklearn.model_selection import train_test_split, KFold
 from sklearn.metrics import roc_curve, roc_auc_score, precision_recall_curve
 from sklearn.linear_model import Lasso, Ridge, LogisticRegression
@@ -8,6 +9,12 @@ from sklearn.ensemble import RandomForestRegressor, AdaBoostRegressor, RandomFor
 from sklearn.neighbors import KNeighborsClassifier, KNeighborsRegressor
 from sklearn.svm import SVC, SVR
 from sklearn.neural_network import MLPRegressor, MLPClassifier
+
+modeldict={'lasso':Lasso, 'ridge':Ridge, 'logreg':LogisticRegression,
+ 'rfreg':RandomForestRegressor, 'rfclass': RandomForestClassifier, 'adabreg':AdaBoostRegressor, 
+ 'adabclass':AdaBoostClassifier, 'knnreg':KNeighborsRegressor, 'knnclass':KNeighborsClassifier, 
+ 'svreg':SVR,'svclass':SVC, 'mlpreg':MLPRegressor,'mlpclass':MLPClassifier}
+
 
 def scores(y,yhat,thres):
     score=[0,0,0,0]
@@ -43,7 +50,7 @@ class StockPrediction:
 	def __init__(self,dataframes_list=[[],[]],gdeltcorp_list=False,model_list=[],sp500t=True):
 		self.dataset_names=dataframes_list[0]
 		self.dataset_list=dataframes_list[1]
-		if gdeltcorp!=False:
+		if gdeltcorp_list!=False:
 			for gdeltcorp in gdeltcorp_list:
 				var_name = [k for k,var in locals().items() if var is gdeltcorp][0]
 				self.dataset_names+=[var_name+'_bow',var_name+'_tfidf']
@@ -114,7 +121,7 @@ class StockPrediction:
 			dataset_name=self.dataset_names[dataset_id]
 		else:
 			dataset_name=dataset_id
-			index_df=self.dataset_names.index(datasetname)
+			index_df=self.dataset_names.index(dataset_name)
 		dataframe=self.dataset_list[index_df]
 		days=list(dataframe.index.values)
 		sp500=self.sp500
@@ -139,16 +146,17 @@ class StockPrediction:
 
 		self.xdata[dataset_name]=(x_trval,x_test)
 		self.ydata[dataset_name]=(y_trval,y_test)
-		self.testmode[dataset_name]=True:
+		self.testmode[dataset_name]=True
 		return
 
 	def kfold_val_reg(self,n_folds_val,dataset_id,regressor,parm,seed):
+		regressor=modeldict[regressor]
 		if isinstance(dataset_id,int):
 			dataset_name=self.dataset_names[dataset_id]
 		else:
 			dataset_name=dataset_id
-		x_trainval=self.self.xdata[dataset_name][0]
-		y_trainval=self.self.xdata[dataset_name][0][:,0]
+		x_trainval=self.xdata[dataset_name][0]
+		y_trainval=self.xdata[dataset_name][0][:,0]
 
 		kf_val = KFold(n_splits=n_folds_val,shuffle=True,random_state=seed)
 		avg_rms_mod_val=0
@@ -184,10 +192,10 @@ class StockPrediction:
 			dataset_name=self.dataset_names[dataset_id]
 		else:
 			dataset_name=dataset_id
-		x_trainval=self.self.xdata[dataset_name][0]
-		y_trainval=self.self.xdata[dataset_name][0][:,0]
-		x_test=self.self.xdata[dataset_name][1]
-		y_test=self.self.xdata[dataset_name][1][:,0]
+		x_trainval=self.xdata[dataset_name][0]
+		y_trainval=self.xdata[dataset_name][0][:,0]
+		x_test=self.xdata[dataset_name][1]
+		y_test=self.xdata[dataset_name][1][:,0]
 
 		coeff=True
 		if regressor in {Lasso,Ridge}:
@@ -249,7 +257,7 @@ class StockPrediction:
 				model=classifier(C=parm[0],kernel=parm[1])  
 			else:
 				print('houston, we have a unknown model problem')
-            return
+				return
 			model.fit(x_train,y_train)
 			avg_scores_train+=np.array(scores(y_train,model.predict(x_train),[thres])[:3])
 			avg_scores_val+=np.array(scores(y_val,model.predict(x_val),[thres])[:3])
