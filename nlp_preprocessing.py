@@ -3,12 +3,9 @@ import os
 import os.path
 import datetime
 from dateutil.rrule import rrule, DAILY
-#import csv
-#import random
 import pandas as pd
 import nltk
 import re
-#import numpy as np
 from nltk.stem.porter import PorterStemmer
 from urllib.parse import urlparse
 from nltk.tokenize import RegexpTokenizer
@@ -46,7 +43,7 @@ class CorpusGDELT:
 		self.currentdir=datadirec
 		return
 	def dateparser(self,date1,date2):
-		#this will take in two dates in some format and spit out a range
+		#this will take in two dates in 'yyyymmdd' format (e.g. '20140110') and spit out a range
 		date1=datetime.date(int(date1[:4]),int(date1[4:6]),int(date1[6:]))
 		date2=datetime.date(int(date2[:4]),int(date2[4:6]),int(date2[6:]))
 		new_dates=[]
@@ -55,19 +52,24 @@ class CorpusGDELT:
 			if datestr not in self.dates:
 				new_dates+=[datestr]
 		return new_dates
+
+	def reader(self,file_path):
+		if not os.path.isfile(file_path):
+			os.system('wget http://data.gdeltproject.org/events/'+date+'.export.CSV.zip')
+			os.system('unzip '+date+'.export.CSV.zip')
+			os.system('mv '+date+'.export.CSV '+self.currentdir)
+			os.system('rm '+date+'.export.CSV.zip')
+		df=pd.read_csv(file_path,delimiter='\t')
+		df.columns=self.header
+		return df
+
+
 	def load_urls(self,date1,date2,save=False):
 		#here I don't remember what I was writing to remember to do...
 		new_dates=self.dateparser(date1,date2)
 		for date in new_dates:
 			file_path=self.currentdir+date+'.export.CSV'
-			if not os.path.isfile(file_path):
-				os.system('wget http://data.gdeltproject.org/events/'+date+'.export.CSV.zip')
-				os.system('unzip '+date+'.export.CSV.zip')
-				os.system('mv '+date+'.export.CSV '+self.currentdir)
-				os.system('rm '+date+'.export.CSV.zip')
-			df=pd.read_csv(file_path,delimiter='\t')
-			df.columns=self.header
-			#df=df.sort_values('NumMentions', ascending=False)
+			df=self.reader(file_path)
 			url_doc=[]
 			if self.minimum_ment<2:
 				for i in range(len(df)):
