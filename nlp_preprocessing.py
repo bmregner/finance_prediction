@@ -68,6 +68,9 @@ class CorpusGDELT:
 	def load_urls(self,date1,date2,save=False):
 		#here I don't remember what I was writing to remember to do...
 		new_dates=self.dateparser(date1,date2)
+		if len(new_dates)>0:
+			self.vect_bow_uptodate=False
+			self.vect_tfidf_uptodate=False
 		for date in new_dates:
 			print('loading news for '+date)
 			file_path=self.currentdir+date+'.export.CSV'
@@ -82,12 +85,9 @@ class CorpusGDELT:
 					if numb_ment>=self.minimum_ment:
 						url_doc+=[[numb_ment,df.iloc[i,-1]]]
 			self.url_corpus+=[url_doc]
+			self.dates+=[date]
 		if save:
 			print("Sorry, I haven't implemented a saving feature yet")
-		self.dates+=new_dates
-		if len(new_dates)>0:
-			self.vect_bow_uptodate=False
-			self.vect_tfidf_uptodate=False
 		return
 
 	def url_tokenizer(self,url):
