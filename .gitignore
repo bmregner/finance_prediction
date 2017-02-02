@@ -1,1 +1,4 @@
 am-scratch/*
+data/am-data-scratch/*
+nlp-preprocessing*
+data/GDELT_1.0/*
