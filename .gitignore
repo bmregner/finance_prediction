@@ -2,3 +2,5 @@ am-scratch/*
 data/am-data-scratch/*
 nlp-preprocessing*
 data/GDELT_1.0/*
+.ipynb_checkpoints/
+__pycache__/
