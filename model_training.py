@@ -2,6 +2,7 @@
 import re
 import numpy as np
 import csv
+import datetime
 from sklearn.model_selection import train_test_split, KFold
 from sklearn.metrics import roc_curve, roc_auc_score, precision_recall_curve
 from sklearn.linear_model import Lasso, Ridge, LogisticRegression
@@ -44,9 +45,16 @@ def scores(y_ground_arr,y_pred_arr,class_thresholds):
 		jaccard_index=true_pos/(false_pos+false_neg+true_pos)
 	return recall,precision,f1score,jaccard_index
 
+
+
+	
+def nextday(today):
+	today=datetime.date(int(today[:4]),int(today[4:6]),int(today[6:]))
+	return (today+datetime.timedelta(days=1)).strftime("%Y%m%d")
+
 class StockPrediction:
 
-	def __init__(self,dataframes_list=[[],[]],gdeltcorp_list=False,model_list=[],sp500t=True):
+	def __init__(self,dataframes_list=[[],[]],gdeltcorp_list=False,sp500t=True):
 		self.dataset_names=dataframes_list[0]
 		self.dataset_list=dataframes_list[1]
 		if gdeltcorp_list!=False:
@@ -55,11 +63,11 @@ class StockPrediction:
 				self.dataset_names+=[var_name+'_bow',var_name+'_tfidf']
 				self.dataset_list+=[gdeltcorp.vect_corpus_bow,]
 				self.dataset_list+=[gdeltcorp.vect_corpus_tfidf,]
-		self.models=model_list
+		self.models=[]
 		self.testmode={}
 		self.xdata={}
 		self.ydata={}
-		self.sp500=[]
+		self.sp500={}
 		if sp500t:
 			self.load_sp500()
 		return
@@ -80,39 +88,19 @@ class StockPrediction:
 		return
 
 	def load_sp500(self):
-		sp500=[]
 		with open('data/SP500am.csv','r') as mycsvfile:
 			reader=csv.reader(mycsvfile)
+			temp_prev='first day'
+			self.sp500[temp_prev]=[]
 			for row in reader:
-				row[0]=re.sub('-','',row[0])
-				sp500+=[row]
-		self.sp500=sp500[:963][::-1]
+				today=re.sub('-','',row[0])
+				self.sp500[today]=[temp_prev]+row[1:]
+				self.sp500[temp_prev]+=[today]
+				temp_prev=today
+			self.sp500[temp_prev]+=['last day']
+		del self.sp500['first day']
+		del self.sp500['Date']
 		return
-
-	def prepare_x(self,dataframe,days,sp):
-		x_arr=[]
-		j=0
-		for i,tomorrow in enumerate(days[1:]):
-			next_bizday=sp[j+1][0]
-			if tomorrow==next_bizday:
-				after_we=0.
-				latest_bizday=sp[j][0]
-				today=days[i]
-				if latest_bizday!=today:
-					after_we=1.
-				x_arr+=[list(dataframe.iloc[i])+[after_we,float(sp[j][-1])]]
-				j+=1
-		return np.array(x_arr)
-
-	def prepare_y(self,days,sp):
-		y_arr=[]
-		j=0
-		for i,tomorrow in enumerate(days[1:]):
-			next_bizday=sp[j+1][0]
-			if tomorrow==next_bizday:
-				y_arr+=[[float(sp[j+1][-1]),(np.sign(float(sp[j+1][-1])-float(sp[j][-1]))+1)/2.]]
-				j+=1
-		return np.array(y_arr)
 
 	def prepare_data(self,dataset_id):
 		if isinstance(dataset_id,int):
@@ -123,12 +111,32 @@ class StockPrediction:
 			index_df=self.dataset_names.index(dataset_name)
 		dataframe=self.dataset_list[index_df]
 		days=list(dataframe.index.values)
-		sp500=self.sp500
-		self.xdata[dataset_name]=self.prepare_x(dataframe,days,sp500)
-		self.ydata[dataset_name]=self.prepare_y(days,sp500)
+		self.xdata[dataset_name]=self.prepare_x(dataframe,days)
+		self.ydata[dataset_name]=self.prepare_y(days)
 		self.testmode[dataset_name]=False
 		return
 
+	def prepare_x(self,dataframe,days):
+		sp=self.sp500
+		x_arr=[]
+		for today in days:
+			tomorrow=nextday(today)
+			if tomorrow in sp.keys():
+				after_weekend=0.
+				if today!=sp[tomorrow][-1]:
+					after_weekend=1.
+				x_arr+=[list(dataframe.loc[today])+[after_weekend,float(sp[sp[tomorrow][-1]][-2])]]
+		return np.array(x_arr)
+
+	def prepare_y(self,days):
+		sp=self.sp500
+		y_arr=[]
+		for today in days:
+			tomorrow=nextday(today)
+			if tomorrow in sp.keys():
+				y_arr+=[[float(sp[tomorrow][-2]),(np.sign(float(sp[tomorrow][-2])-float(sp[sp[tomorrow][-1]][-2]))+1)/2.]]
+		return np.array(y_arr)
+	
 	def trval_test_split(self,dataset_id,test_frac):
 		if isinstance(dataset_id,int):
 			dataset_name=self.dataset_names[dataset_id]
@@ -156,7 +164,6 @@ class StockPrediction:
 			dataset_name=dataset_id
 		x_trainval=self.xdata[dataset_name][0]
 		y_trainval=self.xdata[dataset_name][0][:,0]
-
 		kf_val = KFold(n_splits=n_folds_val,shuffle=True,random_state=seed)
 		avg_rms_mod_val=0
 		avg_rms_mod_train=0
