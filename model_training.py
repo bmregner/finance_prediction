@@ -68,6 +68,8 @@ class StockPrediction:
 		self.xdata={}
 		self.ydata={}
 		self.sp500={}
+		self.yhat_reg={}
+		self.yhat_class={}
 		if sp500t:
 			self.load_sp500()
 		return
@@ -75,7 +77,7 @@ class StockPrediction:
 	def import_nlp_data(self,dataframes_list=[[],[]],gdeltcorp_list=False):
 		self.dataset_names+=dataframes_list[0]
 		self.dataset_list+=dataframes_list[1]
-		if gdeltcorp!=False:
+		if gdeltcorp_list !=False:
 			for gdeltcorp in gdeltcorp_list:
 				var_name = [k for k,var in locals().items() if var is gdeltcorp][0]
 				self.dataset_names+=[var_name+'_bow',var_name+'_tfidf']
@@ -163,7 +165,7 @@ class StockPrediction:
 		else:
 			dataset_name=dataset_id
 		x_trainval=self.xdata[dataset_name][0]
-		y_trainval=self.xdata[dataset_name][0][:,0]
+		y_trainval=self.ydata[dataset_name][0][:,0]
 		kf_val = KFold(n_splits=n_folds_val,shuffle=True,random_state=seed)
 		avg_rms_mod_val=0
 		avg_rms_mod_train=0
@@ -200,9 +202,9 @@ class StockPrediction:
 		else:
 			dataset_name=dataset_id
 		x_trainval=self.xdata[dataset_name][0]
-		y_trainval=self.xdata[dataset_name][0][:,0]
+		y_trainval=self.ydata[dataset_name][0][:,0]
 		x_test=self.xdata[dataset_name][1]
-		y_test=self.xdata[dataset_name][1][:,0]
+		y_test=self.ydata[dataset_name][1][:,0]
 
 		coeff=True
 		if regressor in {Lasso,Ridge}:
@@ -236,14 +238,14 @@ class StockPrediction:
 		return
 
 
-	def kfold_val_class(self,classifier,parm,seed,thres):
+	def kfold_val_class(self,n_folds_val,dataset_id,classifier,parm,seed,thres):
 		classifier=modeldict[classifier]
 		if isinstance(dataset_id,int):
 			dataset_name=self.dataset_names[dataset_id]
 		else:
 			dataset_name=dataset_id
-		x_trainval=self.self.xdata[dataset_name][0]
-		y_trainval=self.self.xdata[dataset_name][0][:,1]
+		x_trainval=self.xdata[dataset_name][0]
+		y_trainval=self.ydata[dataset_name][0][:,1]
 
 		kf_val = KFold(n_splits=n_folds_val,shuffle=True,random_state=seed)
 		avg_scores_train=np.zeros(3)
@@ -281,10 +283,10 @@ class StockPrediction:
 			dataset_name=self.dataset_names[dataset_id]
 		else:
 			dataset_name=dataset_id
-		x_trainval=self.self.xdata[dataset_name][0]
-		y_trainval=self.self.xdata[dataset_name][0][:,0]
-		x_test=self.self.xdata[dataset_name][1]
-		y_test=self.self.xdata[dataset_name][1][:,0]
+		x_trainval=self.xdata[dataset_name][0]
+		y_trainval=self.ydata[dataset_name][0][:,1]
+		x_test=self.xdata[dataset_name][1]
+		y_test=self.ydata[dataset_name][1][:,1]
 
 		coeff=True
 		if classifier in {LogisticRegression,}:
@@ -310,7 +312,8 @@ class StockPrediction:
 
 		model.fit(x_trainval,y_trainval)
 
-		scores_test=np.array(scores(y_test,model.predict(x_test),[thres])[:3])
+		self.yhat_class[dataset_name]=model.predict(x_test)
+		scores_test=np.array(scores(y_test,self.yhat_class[dataset_name],[thres])[:3])
 		print('test_rec,prec,F1:',list(scores_test))   
 		if coeff:
 			return model.coef_
