@@ -42,6 +42,7 @@ class CorpusGDELT:
 		self.datadirs+=[datadirec]
 		self.currentdir=datadirec
 		return
+
 	def dateparser(self,date1,date2):
 		#this will take in two dates in 'yyyymmdd' format (e.g. '20140110') and spit out a range
 		date1=datetime.date(int(date1[:4]),int(date1[4:6]),int(date1[6:]))
@@ -53,8 +54,9 @@ class CorpusGDELT:
 				new_dates+=[datestr]
 		return new_dates
 
-	def reader(self,file_path):
+	def reader(self,file_path,date):
 		if not os.path.isfile(file_path):
+			print('file not already there, so downloading it from http://data.gdeltproject.org/events/')
 			os.system('wget http://data.gdeltproject.org/events/'+date+'.export.CSV.zip')
 			os.system('unzip '+date+'.export.CSV.zip')
 			os.system('mv '+date+'.export.CSV '+self.currentdir)
@@ -63,13 +65,13 @@ class CorpusGDELT:
 		df.columns=self.header
 		return df
 
-
 	def load_urls(self,date1,date2,save=False):
 		#here I don't remember what I was writing to remember to do...
 		new_dates=self.dateparser(date1,date2)
 		for date in new_dates:
+			print('loading news for '+date)
 			file_path=self.currentdir+date+'.export.CSV'
-			df=self.reader(file_path)
+			df=self.reader(file_path,date)
 			url_doc=[]
 			if self.minimum_ment<2:
 				for i in range(len(df)):
@@ -87,27 +89,28 @@ class CorpusGDELT:
 			self.vect_bow_uptodate=False
 			self.vect_tfidf_uptodate=False
 		return
+
 	def url_tokenizer(self,url):
-		c,d,e=[],[],[]
+		filter3,filter4,filter5=[],[],[]
 		if url!='BBC Monitoring':
-			a=urlparse(url)[2].split('.')[0].split('/')[-1]
-			b = self.re_tokenizer.tokenize(a.lower())
-			for word in b:
-				c+=[self.punctuation.sub("", word)]
-			for word in c:
+			filter1=urlparse(url)[2].split('.')[0].split('/')[-1]
+			filter2 = self.re_tokenizer.tokenize(filter1.lower())
+			for word in filter2:
+				filter3+=[self.punctuation.sub("", word)]
+			for word in filter3:
 				if word not in self.stop_words:
-					d+=[word]
-			if len(d)<=1:
+					filter4+=[word]
+			if len(filter4)<=1:
 				return []
-			for word in d:
+			for word in filter4:
 				stemtemp=self.porter.stem(word)
 				length=len(stemtemp)
 				unique=len(set(stemtemp))
 				num_vow=sum(stemtemp.count(c) for c in self.vowels)
 				num_cons=sum(stemtemp.count(c) for c in self.consonants)
 				if length<15 and (num_cons-num_vow)<7 and unique>1 and num_vow>0 and (length-unique)<5 and not self.spurious_beginnings.match(stemtemp) and '_' not in stemtemp:
-					e+=[stemtemp]
-		return e
+					filter5+=[stemtemp]
+		return filter5
 
 	def wrapper_tokenizer(self,url_doc):
 		wordlist=[]
@@ -115,17 +118,24 @@ class CorpusGDELT:
 			for mentions in range(url[0]):
 				wordlist+=self.url_tokenizer(url[1])
 		return wordlist
+
 	def gdelt_preprocess(self,tfidf=False):
+		if (tfidf and self.vect_tfidf_uptodate) or (not tfidf and self.vect_bow_uptodate):
+			print('Nothing to be done, dataframes are up to date')
+			return
 		if tfidf:
 			vectorizer = TfidfVectorizer(min_df=1,tokenizer=self.wrapper_tokenizer,lowercase=False)
 		else:
 			vectorizer = CountVectorizer(min_df=1,tokenizer=self.wrapper_tokenizer,lowercase=False)
 		X = vectorizer.fit_transform(self.url_corpus).toarray()
 		dictionary={col:X[:,i] for i,col in enumerate(vectorizer.get_feature_names())}
+		dictionary['news_date']=self.dates
+		dataf=pd.DataFrame(dictionary).set_index('news_date')
 		if tfidf:
-			self.vect_corpus_tfidf=pd.DataFrame(dictionary)
+			self.vect_corpus_tfidf=dataf
 			self.vect_tfidf_uptodate=True
 		else:
-			self.vect_corpus_bow=pd.DataFrame(dictionary)
+			self.vect_corpus_bow=dataf
 			self.vect_bow_uptodate=True
+
 		return 
