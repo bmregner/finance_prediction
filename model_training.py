@@ -47,7 +47,7 @@ def scores(y_ground_arr,y_pred_arr,class_thresholds):
 
 
 
-	
+
 def nextday(today):
 	today=datetime.date(int(today[:4]),int(today[4:6]),int(today[6:]))
 	return (today+datetime.timedelta(days=1)).strftime("%Y%m%d")
@@ -69,6 +69,7 @@ class StockPrediction:
 		self.ydata={}
 		self.sp500={}
 		self.yhat_reg={}
+		self.yhat_reg_diff={}
 		self.yhat_class={}
 		if sp500t:
 			self.load_sp500()
@@ -136,7 +137,7 @@ class StockPrediction:
 		for today in days:
 			tomorrow=nextday(today)
 			if tomorrow in sp.keys():
-				y_arr+=[[float(sp[tomorrow][-2]),(np.sign(float(sp[tomorrow][-2])-float(sp[sp[tomorrow][-1]][-2]))+1)/2.]]
+				y_arr+=[[float(sp[tomorrow][-2]),(np.sign(float(sp[tomorrow][-2])-float(sp[sp[tomorrow][-1]][-2]))+1)/2.,float(sp[tomorrow][-2])-float(sp[sp[tomorrow][-1]][-2])]]
 		return np.array(y_arr)
 	
 	def trval_test_split(self,dataset_id,test_frac):
@@ -158,14 +159,17 @@ class StockPrediction:
 		self.testmode[dataset_name]=True
 		return
 
-	def kfold_val_reg(self,n_folds_val,dataset_id,regressor,parm,seed):
+	def kfold_val_reg(self,n_folds_val,dataset_id,regressor,parm,seed,differential=False):
 		regressor=modeldict[regressor]
 		if isinstance(dataset_id,int):
 			dataset_name=self.dataset_names[dataset_id]
 		else:
 			dataset_name=dataset_id
 		x_trainval=self.xdata[dataset_name][0]
-		y_trainval=self.ydata[dataset_name][0][:,0]
+		if differential:
+			y_trainval=self.ydata[dataset_name][0][:,2]
+		else:
+			y_trainval=self.ydata[dataset_name][0][:,0]
 		kf_val = KFold(n_splits=n_folds_val,shuffle=True,random_state=seed)
 		avg_rms_mod_val=0
 		avg_rms_mod_train=0
@@ -195,16 +199,21 @@ class StockPrediction:
 		print('avg_train_rmse:',avg_rms_mod_train,'avg_validation_rmse:',avg_rms_mod_val)
 		return
 
-	def kfold_test_reg(self,dataset_id,regressor,parm):
+	def kfold_test_reg(self,dataset_id,regressor,parm,differential=False):
 		regressor=modeldict[regressor]
 		if isinstance(dataset_id,int):
 			dataset_name=self.dataset_names[dataset_id]
 		else:
 			dataset_name=dataset_id
 		x_trainval=self.xdata[dataset_name][0]
-		y_trainval=self.ydata[dataset_name][0][:,0]
 		x_test=self.xdata[dataset_name][1]
-		y_test=self.ydata[dataset_name][1][:,0]
+
+		if differential:
+			y_trainval=self.ydata[dataset_name][0][:,2]
+			y_test=self.ydata[dataset_name][1][:,2]
+		else:
+			y_trainval=self.ydata[dataset_name][0][:,0]
+			y_test=self.ydata[dataset_name][1][:,0]
 
 		coeff=True
 		if regressor in {Lasso,Ridge}:
@@ -230,7 +239,13 @@ class StockPrediction:
 		model.fit(x_trainval,y_trainval)
 
 		rms_mod_test=np.sqrt((sum((model.predict(x_test)-y_test)**2)/len(y_test)))
-		rms_rand_test=np.sqrt((sum((x_test[:,-1]-y_test)**2)/len(y_test)))
+		if differential:
+			rms_rand_test=np.sqrt((sum((y_test)**2)/len(y_test)))
+			self.yhat_reg_diff[dataset_name]=model.predict(x_test)			
+		else:
+			rms_rand_test=np.sqrt((sum((x_test[:,-1]-y_test)**2)/len(y_test)))
+			self.yhat_reg[dataset_name]=model.predict(x_test)			
+
 		print('model_test_rmse:',rms_mod_test,'flat_test_rmse:',rms_rand_test)
 
 		if coeff:
