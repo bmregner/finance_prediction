@@ -45,12 +45,11 @@ def scores(y_ground_arr,y_pred_arr,class_thresholds):
 		jaccard_index=true_pos/(false_pos+false_neg+true_pos)
 	return recall,precision,f1score,jaccard_index
 
-
-
-
 def nextday(today):
 	today=datetime.date(int(today[:4]),int(today[4:6]),int(today[6:]))
 	return (today+datetime.timedelta(days=1)).strftime("%Y%m%d")
+
+
 
 class StockPrediction:
 
@@ -252,7 +251,6 @@ class StockPrediction:
 			return model.coef_
 		return
 
-
 	def kfold_val_class(self,n_folds_val,dataset_id,classifier,parm,seed,thres):
 		classifier=modeldict[classifier]
 		if isinstance(dataset_id,int):
@@ -333,9 +331,3 @@ class StockPrediction:
 		if coeff:
 			return model.coef_
 		return
-
-
-
-
-
-
