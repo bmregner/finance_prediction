@@ -1,6 +1,8 @@
 #this module creates datasets and trains models
 import re
 import numpy as np
+import csv
+import datetime
 from sklearn.model_selection import train_test_split, KFold
 from sklearn.metrics import roc_curve, roc_auc_score, precision_recall_curve
 from sklearn.linear_model import Lasso, Ridge, LogisticRegression
@@ -9,51 +11,63 @@ from sklearn.neighbors import KNeighborsClassifier, KNeighborsRegressor
 from sklearn.svm import SVC, SVR
 from sklearn.neural_network import MLPRegressor, MLPClassifier
 
-def scores(y,yhat,thres):
-    score=[0,0,0,0]
-    for ii in zip(yhat,y):
-        temp=2*np.ceil(ii[0]-thres)-ii[1]
-        for jj in temp:
-            score[int(jj)]+=1
-    fp=score[2]
-    fn=score[-1]
-    tp=score[1]
-    tn=score[0]
-    #print(fp,fn,tp,tn)
-    if fn==0:
-        rec=1.
-    else:
-        rec=tp/(tp+fn)
-    if fp==0:
-        prec=1.
-    else:
-        prec=tp/(tp+fp)
-    if prec==0. and rec==0.:
-        f1=0.
-    else:
-        f1=2*rec*prec/(rec+prec)
-    if fp+fn==0:
-        ji=1.
-    else:
-        ji=tp/(fp+fn+tp)
-    return rec,prec,f1,ji
+modeldict={'lasso':Lasso, 'ridge':Ridge, 'logreg':LogisticRegression,
+ 'rfreg':RandomForestRegressor, 'rfclass': RandomForestClassifier, 'adabreg':AdaBoostRegressor, 
+ 'adabclass':AdaBoostClassifier, 'knnreg':KNeighborsRegressor, 'knnclass':KNeighborsClassifier, 
+ 'svreg':SVR,'svclass':SVC, 'mlpreg':MLPRegressor,'mlpclass':MLPClassifier}
+
+
+def scores(y_ground_arr,y_pred_arr,class_thresholds):
+	scores_arr=[0,0,0,0]
+	for y_ground_pred in zip(y_pred_arr,y_ground_arr):
+		temp=2*np.ceil(y_ground_pred[0]-class_thresholds)-y_ground_pred[1]
+		for jj in temp:
+			scores_arr[int(jj)]+=1
+	false_pos=scores_arr[2]
+	false_neg=scores_arr[-1]
+	true_pos=scores_arr[1]
+	true_neg=scores_arr[0]
+	if false_neg==0:
+		recall=1.
+	else:
+		recall=true_pos/(true_pos+false_neg)
+	if false_pos==0:
+		precision=1.
+	else:
+		precision=true_pos/(true_pos+false_pos)
+	if precision==0. and recall==0.:
+		f1score=0.
+	else:
+		f1score=2*recall*precision/(recall+precision)
+	if (false_pos+false_neg)==0:
+		jaccard_index=1.
+	else:
+		jaccard_index=true_pos/(false_pos+false_neg+true_pos)
+	return recall,precision,f1score,jaccard_index
+
+
+
+	
+def nextday(today):
+	today=datetime.date(int(today[:4]),int(today[4:6]),int(today[6:]))
+	return (today+datetime.timedelta(days=1)).strftime("%Y%m%d")
 
 class StockPrediction:
 
-	def __init__(self,dataframes_list=[[],[]],gdeltcorp_list=False,model_list=[],sp500t=True):
+	def __init__(self,dataframes_list=[[],[]],gdeltcorp_list=False,sp500t=True):
 		self.dataset_names=dataframes_list[0]
 		self.dataset_list=dataframes_list[1]
-		if gdeltcorp!=False:
+		if gdeltcorp_list!=False:
 			for gdeltcorp in gdeltcorp_list:
 				var_name = [k for k,var in locals().items() if var is gdeltcorp][0]
 				self.dataset_names+=[var_name+'_bow',var_name+'_tfidf']
 				self.dataset_list+=[gdeltcorp.vect_corpus_bow,]
 				self.dataset_list+=[gdeltcorp.vect_corpus_tfidf,]
-		self.models=model_list
+		self.models=[]
 		self.testmode={}
 		self.xdata={}
 		self.ydata={}
-		self.sp500=[]
+		self.sp500={}
 		if sp500t:
 			self.load_sp500()
 		return
@@ -74,39 +88,19 @@ class StockPrediction:
 		return
 
 	def load_sp500(self):
-		sp500=[]
 		with open('data/SP500am.csv','r') as mycsvfile:
 			reader=csv.reader(mycsvfile)
+			temp_prev='first day'
+			self.sp500[temp_prev]=[]
 			for row in reader:
-				row[0]=re.sub('-','',row[0])
-				sp500+=[row]
-		self.sp500=sp500[:963][::-1]
+				today=re.sub('-','',row[0])
+				self.sp500[today]=[temp_prev]+row[1:]
+				self.sp500[temp_prev]+=[today]
+				temp_prev=today
+			self.sp500[temp_prev]+=['last day']
+		del self.sp500['first day']
+		del self.sp500['Date']
 		return
-
-	def prepare_x(self,dataframe,days,sp):
-		x_arr=[]
-		j=0
-		for i,tomorrow in enumerate(days[1:]):
-			next_bizday=sp[j+1][0]
-			if tomorrow==next_bizday:
-				after_we=0.
-				latest_bizday=sp[j][0]
-				today=days[i]
-				if latest_bizday!=today:
-					after_we=1.
-				x_arr+=[list(dataframe.iloc[i])+[after_we,float(sp[j][-1])]]
-				j+=1
-		return np.array(x_arr)
-
-	def prepare_y(self,days,sp):
-		y_arr=[]
-		j=0
-		for i,tomorrow in enumerate(days[1:]):
-			next_bizday=sp[j+1][0]
-			if tomorrow==next_bizday:
-				y_arr+=[[float(sp[j+1][-1]),(np.sign(float(sp[j+1][-1])-float(sp[j][-1]))+1)/2.]]
-				j+=1
-		return np.array(y_arr)
 
 	def prepare_data(self,dataset_id):
 		if isinstance(dataset_id,int):
@@ -114,15 +108,35 @@ class StockPrediction:
 			dataset_name=self.dataset_names[dataset_id]
 		else:
 			dataset_name=dataset_id
-			index_df=self.dataset_names.index(datasetname)
+			index_df=self.dataset_names.index(dataset_name)
 		dataframe=self.dataset_list[index_df]
 		days=list(dataframe.index.values)
-		sp500=self.sp500
-		self.xdata[dataset_name]=self.prepare_x(dataframe,days,sp500)
-		self.ydata[dataset_name]=self.prepare_y(days,sp500)
+		self.xdata[dataset_name]=self.prepare_x(dataframe,days)
+		self.ydata[dataset_name]=self.prepare_y(days)
 		self.testmode[dataset_name]=False
 		return
 
+	def prepare_x(self,dataframe,days):
+		sp=self.sp500
+		x_arr=[]
+		for today in days:
+			tomorrow=nextday(today)
+			if tomorrow in sp.keys():
+				after_weekend=0.
+				if today!=sp[tomorrow][-1]:
+					after_weekend=1.
+				x_arr+=[list(dataframe.loc[today])+[after_weekend,float(sp[sp[tomorrow][-1]][-2])]]
+		return np.array(x_arr)
+
+	def prepare_y(self,days):
+		sp=self.sp500
+		y_arr=[]
+		for today in days:
+			tomorrow=nextday(today)
+			if tomorrow in sp.keys():
+				y_arr+=[[float(sp[tomorrow][-2]),(np.sign(float(sp[tomorrow][-2])-float(sp[sp[tomorrow][-1]][-2]))+1)/2.]]
+		return np.array(y_arr)
+	
 	def trval_test_split(self,dataset_id,test_frac):
 		if isinstance(dataset_id,int):
 			dataset_name=self.dataset_names[dataset_id]
@@ -139,17 +153,17 @@ class StockPrediction:
 
 		self.xdata[dataset_name]=(x_trval,x_test)
 		self.ydata[dataset_name]=(y_trval,y_test)
-		self.testmode[dataset_name]=True:
+		self.testmode[dataset_name]=True
 		return
 
 	def kfold_val_reg(self,n_folds_val,dataset_id,regressor,parm,seed):
+		regressor=modeldict[regressor]
 		if isinstance(dataset_id,int):
 			dataset_name=self.dataset_names[dataset_id]
 		else:
 			dataset_name=dataset_id
-		x_trainval=self.self.xdata[dataset_name][0]
-		y_trainval=self.self.xdata[dataset_name][0][:,0]
-
+		x_trainval=self.xdata[dataset_name][0]
+		y_trainval=self.xdata[dataset_name][0][:,0]
 		kf_val = KFold(n_splits=n_folds_val,shuffle=True,random_state=seed)
 		avg_rms_mod_val=0
 		avg_rms_mod_train=0
@@ -180,14 +194,15 @@ class StockPrediction:
 		return
 
 	def kfold_test_reg(self,dataset_id,regressor,parm):
+		regressor=modeldict[regressor]
 		if isinstance(dataset_id,int):
 			dataset_name=self.dataset_names[dataset_id]
 		else:
 			dataset_name=dataset_id
-		x_trainval=self.self.xdata[dataset_name][0]
-		y_trainval=self.self.xdata[dataset_name][0][:,0]
-		x_test=self.self.xdata[dataset_name][1]
-		y_test=self.self.xdata[dataset_name][1][:,0]
+		x_trainval=self.xdata[dataset_name][0]
+		y_trainval=self.xdata[dataset_name][0][:,0]
+		x_test=self.xdata[dataset_name][1]
+		y_test=self.xdata[dataset_name][1][:,0]
 
 		coeff=True
 		if regressor in {Lasso,Ridge}:
@@ -222,6 +237,7 @@ class StockPrediction:
 
 
 	def kfold_val_class(self,classifier,parm,seed,thres):
+		classifier=modeldict[classifier]
 		if isinstance(dataset_id,int):
 			dataset_name=self.dataset_names[dataset_id]
 		else:
@@ -249,7 +265,7 @@ class StockPrediction:
 				model=classifier(C=parm[0],kernel=parm[1])  
 			else:
 				print('houston, we have a unknown model problem')
-            return
+				return
 			model.fit(x_train,y_train)
 			avg_scores_train+=np.array(scores(y_train,model.predict(x_train),[thres])[:3])
 			avg_scores_val+=np.array(scores(y_val,model.predict(x_val),[thres])[:3])
@@ -260,6 +276,7 @@ class StockPrediction:
 		return
 
 	def kfold_test_class(self,dataset_id,classifier,parm,thres):
+		classifier=modeldict[classifier]
 		if isinstance(dataset_id,int):
 			dataset_name=self.dataset_names[dataset_id]
 		else:
@@ -290,7 +307,7 @@ class StockPrediction:
 		else:
 			print('houston, we have a unknown model problem')
 			return
-            
+
 		model.fit(x_trainval,y_trainval)
 
 		scores_test=np.array(scores(y_test,model.predict(x_test),[thres])[:3])
