@@ -2,6 +2,7 @@
 import os
 import os.path
 import datetime
+import json
 from dateutil.rrule import rrule, DAILY
 import pandas as pd
 import nltk
@@ -38,13 +39,20 @@ class CorpusGDELT:
 		self.spurious_beginnings = re.compile(r'idind.|idus.|iduk.')
 		return
 
-	def change_dir(datadirec):
+	def change_dir(self,datadirec):
+		"""
+		This simply changes the working directory
+		and adds the new one to the list of all the directories used
+		"""
 		self.datadirs+=[datadirec]
 		self.currentdir=datadirec
 		return
 
 	def dateparser(self,date1,date2):
-		#this will take in two dates in 'yyyymmdd' format (e.g. '20140110') and spit out a range
+		"""
+		This takes in two dates in 'yyyymmdd' format (e.g. '20140110') and spits out 
+		a range of valid dates in the same format
+		"""
 		date1=datetime.date(int(date1[:4]),int(date1[4:6]),int(date1[6:]))
 		date2=datetime.date(int(date2[:4]),int(date2[4:6]),int(date2[6:]))
 		new_dates=[]
@@ -55,6 +63,11 @@ class CorpusGDELT:
 		return new_dates
 
 	def reader(self,file_path,date):
+		"""
+		This method reads a datafram out of a csv file that represents one day of gdelt news
+		If the file doesn't already exist in the curent working directory, 
+		it'll download it and process it
+		"""
 		if not os.path.isfile(file_path):
 			print('file not already there, so downloading it from http://data.gdeltproject.org/events/')
 			os.system('wget http://data.gdeltproject.org/events/'+date+'.export.CSV.zip')
@@ -66,7 +79,12 @@ class CorpusGDELT:
 		return df
 
 	def load_urls(self,date1,date2,save=False):
-		#here I don't remember what I was writing to remember to do...
+		"""
+		This method will read in the relevant dataframe for each date in the range date1-date2, 
+		after which it'll extract the urls and the number of mentions of each event and store them 
+		into the corpus class attribute as a list of documents, where each document is a 
+		list of several [numb_mentions,url].
+		"""
 		new_dates=self.dateparser(date1,date2)
 		if len(new_dates)>0:
 			self.vect_bow_uptodate=False
@@ -91,6 +109,10 @@ class CorpusGDELT:
 		return
 
 	def url_tokenizer(self,url):
+		"""
+		This method is my customized url tokenizer, it takes in one url and returns a list of
+		relevants tokens, after stemming, filtering out stopwords and other spurious tokens.
+		"""
 		filter3,filter4,filter5=[],[],[]
 		if url!='BBC Monitoring':
 			filter1=urlparse(url)[2].split('.')[0].split('/')[-1]
@@ -113,6 +135,11 @@ class CorpusGDELT:
 		return filter5
 
 	def wrapper_tokenizer(self,url_doc):
+		"""
+		This method is simply a wrapper for my tokenizer to make it consistent with the callable
+		tokenizer that scikitlearn vectorizers need to be passed. It takes in a document 
+		(= list of [numb_mentions,url] pairs) and returns a large list of tokens
+		"""
 		wordlist=[]
 		for url in url_doc:
 			for mentions in range(url[0]):
@@ -120,6 +147,10 @@ class CorpusGDELT:
 		return wordlist
 
 	def gdelt_preprocess(self,tfidf=False):
+		"""
+		This is the vectorizer! It can be called with or without tfidf approach. It populates
+		the "corpus" fields of the class with dataframes processing from the url corpora
+		"""
 		if (tfidf and self.vect_tfidf_uptodate) or (not tfidf and self.vect_bow_uptodate):
 			print('Nothing to be done, dataframes are up to date')
 			return
@@ -139,3 +170,61 @@ class CorpusGDELT:
 			self.vect_bow_uptodate=True
 
 		return 
+
+
+class CorpusGoogleNews:
+
+	def __init__(self,path='data/'):
+		self.datadirectory=path
+		self.raw_articles={}
+		return
+
+	
+	def read_Google_articles(self,articlelist, path):
+		""" 
+		Converts Google News JSON file into a data frame. Takes in
+		a .json file and returns a dataframe using the json's dictionary-like
+		structure 
+		"""
+		
+		with open(path + articlelist[0],'r') as first:
+			firstdict = json.load(first)
+			combined_df = pd.DataFrame.from_dict(firstdict, orient = 'index')
+			combined_df = combined_df.T
+		
+		for article in articlelist:
+			with open(path + article, 'r') as fin:
+				mydict = json.load(fin)
+			current_df = pd.DataFrame.from_dict(mydict, orient = 'index')
+			current_df = current_df.T
+			combined_df = combined_df.append(current_df, ignore_index=True)
+		
+		# USE CONCAT WITH .APPEND DOESN'T WORK!!!
+		#     final_df = pd.concat([combined_df, current_df])
+			
+		return combined_df
+
+	def data_directory_crawl(self, ticker):
+		"""
+		Crawls through a given parent directory to create a dataframe of articles and their body for the given company ticker
+		"""
+		path=self.datadirectory
+		mypath = path + ticker + '/'
+		company_articles_combined_days=pd.DataFrame()
+
+		for directory in os.listdir(mypath):
+		#     print directory
+			f = []
+			d = []
+			for (dirpath, dirnames, filenames) in os.walk(mypath + directory):
+				f.extend(filenames)
+				d.extend(dirnames)
+
+			company_articles_combined_days = company_articles_combined_days.append(self.read_Google_articles(f, mypath + directory + '/'))
+			if directory not in self.raw_articles.keys():
+				self.raw_articles[directory]=company_articles_combined_days
+
+		return
+
+
+
