@@ -4,3 +4,6 @@ nlp-preprocessing*
 data/GDELT_1.0/*
 .ipynb_checkpoints/
 __pycache__/
+stockgossip.key
+stockgossip.pdf
+tests/.cache/
