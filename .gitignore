@@ -7,3 +7,5 @@ __pycache__/
 stockgossip.key
 stockgossip.pdf
 tests/.cache/
+.cache/
+tests/test_all.sh
