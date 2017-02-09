@@ -1,7 +1,7 @@
 # Finance Prediction
 # status = "In development"
 ----
-A machine learning project to predict S&P 500 prices from news and quarterly reports.
+This project is the building of an automated, general purpose, and real-time pipeline to predict financial indicators using machine learning on several news sources.
 
 # Contributors
 ---
@@ -10,16 +10,18 @@ Team: Andrea Massari, Daisy Zheng, Saina Lajevardi
 
 # To-do
 ---
-- Obtain data
-- Try to predict using simple models
-- Visualize results on a webpage
-- Implement unit tests
-- Use clean coding standards
+- [x] Obtain data
+- [x] Try to predict using simple models
+- [x] Increase automation and modularity
+- [x] Use clean coding standards
+- [ ] Implement unit tests
+- [ ] Visualize results on a webpage
+- [ ] Make model dynamic (real-time updates)
 
 # Future work
 ---
-- Make model dynamic
 - Bring in other data sources
 - Try other models
+- Try to predict different indicators/quantities
 
 
