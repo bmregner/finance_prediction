@@ -24,7 +24,7 @@ class CorpusGDELT:
 	project files.
 	"""
 
-	def __init__(self,min_ment=1,datadirec='data/GDELT_1.0/'):
+	def __init__(self,min_ment=1,datadirec='../data/GDELT_1.0/'):
 		"""
 		The initializer mainly builds empty attributes, apart from the mentions cutoff which might be 
 		in the hundreds for concreteness (but it's defaulted to 1, that is no cutoff at all), and apart
@@ -206,13 +206,13 @@ class CorpusGoogleNews:
 	This class contains the NLP preprocessing from the google news corpus
 	"""
 
-	def __init__(self,path='data/'):
+	def __init__(self,path='../data/'):
 		self.datadirectory=path
 		self.raw_articles={}
 		return
 
 	
-	def read_Google_articles(self,articlelist, path):
+	def _read_Google_articles(self,articlelist, path):
 		""" 
 		Converts Google News JSON file into a data frame. Takes in
 		a .json file and returns a dataframe using the json's dictionary-like
@@ -236,7 +236,7 @@ class CorpusGoogleNews:
 			
 		return combined_df
 
-	def data_directory_crawl(self, ticker):
+	def data_directory_crawl(self, ticker,verbose=1):
 		"""
 		Crawls through a given parent directory to create a dataframe of articles and their body for the given company ticker
 		"""
@@ -245,14 +245,15 @@ class CorpusGoogleNews:
 		company_articles_combined_days=pd.DataFrame()
 
 		for directory in os.listdir(mypath):
-		#     print directory
+			if verbose:
+				print(directory)
 			f = []
 			d = []
 			for (dirpath, dirnames, filenames) in os.walk(mypath + directory):
 				f.extend(filenames)
 				d.extend(dirnames)
 
-			company_articles_combined_days = company_articles_combined_days.append(self.read_Google_articles(f, mypath + directory + '/'))
+			company_articles_combined_days = company_articles_combined_days.append(self._read_Google_articles(f, mypath + directory + '/'))
 			if directory not in self.raw_articles.keys():
 				self.raw_articles[directory]=company_articles_combined_days
 
