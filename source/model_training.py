@@ -83,7 +83,6 @@ class StockPrediction:
 	 to be fed to ML algorithms, also predictions (yhat_*) keeping track of test/validation stage 
 	 (testmode) and in the future of model parameters and settings.
 	"""
-
 	def __init__(self,dataframes_list=[[],[]],gdeltcorp_list=False,sp500t=True):
 		self.dataset_names=dataframes_list[0]
 		self.dataset_list=dataframes_list[1]
@@ -93,20 +92,21 @@ class StockPrediction:
 				self.dataset_names+=[var_name+'_bow',var_name+'_tfidf']
 				self.dataset_list+=[gdeltcorp.vect_corpus_bow,]
 				self.dataset_list+=[gdeltcorp.vect_corpus_tfidf,]
-		#list of used models, not yet really used
-		self.models=[]
+		#list of used models, this feature is not yet really inuse
+		self._models=[]
 		#have we already split the data with key 'something' into training+validation and testing?
-		self.testmode={}
+		self._testmode={}
 		#nlp+time series features for dataset of key 'something'
 		self.xdata={}
 		#target data for regression, incremental regression, and bullish/bearish classification
 		self.ydata={}
 		self.sp500={}
+		#yhat arrays are all going to host model predictions
 		self.yhat_reg={}
 		self.yhat_reg_diff={}
 		self.yhat_class={}
 		if sp500t:
-			self.load_sp500()
+			self._load_sp500()
 		return
 
 	def import_nlp_data(self,dataframes_list=[[],[]],gdeltcorp_list=False):
@@ -129,16 +129,16 @@ class StockPrediction:
 		Probably deprecated, it adds to the used models but I think I won't be adding models like 
 		this, only when fitting them.
 		"""
-		self.models+=model_list
+		self._models+=model_list
 		return
 
-	def load_sp500(self):
+	def _load_sp500(self):
 		"""
 		This method loads S&P500 index data, probably it could be part of the initializer but for 
 		generality it's separate. One could envision a future where other loaders load different 
 		time series to predict.
 		"""
-		with open('data/SP500am.csv','r') as mycsvfile:
+		with open('../data/SP500am.csv','r') as mycsvfile:
 			reader=csv.reader(mycsvfile)
 			temp_prev='first day'
 			self.sp500[temp_prev]=[]
@@ -154,7 +154,7 @@ class StockPrediction:
 
 	def prepare_data(self,dataset_id):
 		"""
-		This method simply read a certain dataframe labeled by a certain name or ordinal number (dataset_id)
+		This method simply reads a certain dataframe labeled by a certain name or ordinal number (dataset_id)
 		together with the targets y and converts this information into numpy arrays stored in dictionaries
 		"""
 		if isinstance(dataset_id,int):
@@ -165,12 +165,12 @@ class StockPrediction:
 			index_df=self.dataset_names.index(dataset_name)
 		dataframe=self.dataset_list[index_df]
 		days=list(dataframe.index.values)
-		self.xdata[dataset_name]=self.prepare_x(dataframe,days)
-		self.ydata[dataset_name]=self.prepare_y(days)
-		self.testmode[dataset_name]=False
+		self.xdata[dataset_name]=self._prepare_x(dataframe,days)
+		self.ydata[dataset_name]=self._prepare_y(days)
+		self._testmode[dataset_name]=False
 		return
 
-	def prepare_x(self,dataframe,days):
+	def _prepare_x(self,dataframe,days):
 		"""
 		This method is used to specifically convert datasets into numpy arrays containing the input features
 		"""
@@ -188,7 +188,7 @@ class StockPrediction:
 		return np.array(x_arr)
 
 
-	def prepare_y(self,days):
+	def _prepare_y(self,days):
 		"""
 		This method is used to specifically convert datasets into numpy arrays containing the output/target
 		"""
@@ -213,7 +213,7 @@ class StockPrediction:
 			dataset_name=self.dataset_names[dataset_id]
 		else:
 			dataset_name=dataset_id
-		if self.testmode[dataset_name]==True:
+		if self._testmode[dataset_name]==True:
 			x=np.concatenate(self.xdata[dataset_name])
 			y=np.concatenate(self.ydata[dataset_name])
 		else:
@@ -228,7 +228,7 @@ class StockPrediction:
 		#(train+val,test). I keep track of this with the 'testmode' attribute
 		self.xdata[dataset_name]=(x_trval,x_test)
 		self.ydata[dataset_name]=(y_trval,y_test)
-		self.testmode[dataset_name]=True
+		self._testmode[dataset_name]=True
 		return
 
 	def kfold_val_reg(self,n_folds_val,dataset_id,regressor,parm,seed,differential=False,scaling=False):

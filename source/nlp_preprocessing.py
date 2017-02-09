@@ -57,6 +57,7 @@ class CorpusGDELT:
 		self.vowels = list("aeiouy")
 		self.consonants = list("bcdfghjklmnpqrstvwxz")
 		self.spurious_beginnings = re.compile(r'idind.|idus.|iduk.')
+		self._dtypes={8:str,9:str,10:str,11:str,12:str,13:str,14:str,18:str,19:str,20:str,21:str,23:str,24:str,26:str,27:str,28:str}
 		return
 
 	def change_dir(self,datadirec):
@@ -78,11 +79,11 @@ class CorpusGDELT:
 		new_dates=[]
 		for date in rrule(DAILY, dtstart=date1, until=date2):
 			datestr=date.strftime("%Y%m%d")
-			if datestr not in self.dates:
+			if datestr not in self.dates and int(datestr[:6])>201303:#earliest available date is 20130401
 				new_dates+=[datestr]
 		return new_dates
 
-	def reader(self,file_path,date):
+	def _reader(self,file_path,date):
 		"""
 		This method reads a dataframe out of a csv file that represents one day of gdelt news. If the file 
 		doesn't already exist in the curent working directory, it'll download it and process it
@@ -93,7 +94,7 @@ class CorpusGDELT:
 			os.system('unzip '+date+'.export.CSV.zip')
 			os.system('mv '+date+'.export.CSV '+self.currentdir)
 			os.system('rm '+date+'.export.CSV.zip')
-		df=pd.read_csv(file_path,delimiter='\t')
+		df=pd.read_csv(file_path,delimiter='\t',dtype=self._dtypes)
 		df.columns=self.header
 		return df
 
@@ -112,7 +113,7 @@ class CorpusGDELT:
 		for date in new_dates:
 			print('loading news for '+date)
 			file_path=self.currentdir+date+'.export.CSV'
-			df=self.reader(file_path,date)
+			df=self._reader(file_path,date)
 			url_doc=[]
 			#here is where I apply the mentions cutoff, of course only if the cutoff is larger than 1
 			if self.minimum_ment<2:
