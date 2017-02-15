@@ -654,6 +654,7 @@ class StockPrediction:
 			max_score=0.
 			val_fold=0
 			any_change=True
+			max_parm=[]
 			for parm_range in parm_ranges:
 				if isinstance(parm_range[1],list):
 					max_parm+=[parm_range[1][2]]
