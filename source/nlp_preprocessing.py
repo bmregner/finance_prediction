@@ -226,32 +226,23 @@ class CorpusGDELT:
 			dictionary={}
 			for col in range(size_w2v):
 				dictionary['w2v_'+str(col+1)]=[sum([model[word][col] for word in news_day]) for news_day in corpus]
-			#vectorized=np.array()
-			#print(vectorized)
-			dictionary['news_date']=old_dates
-			dataf=pd.DataFrame(dictionary).set_index('news_date')
 		#defining the vectorizer and passing it my callable custom tokenizer
 		else:
 			if vectrz=='tfidf':
 				vectorizer = TfidfVectorizer(min_df=1,tokenizer=self.wrapper_tokenizer,lowercase=False)
 			else:
 				vectorizer = CountVectorizer(min_df=1,tokenizer=self.wrapper_tokenizer,lowercase=False)
-			#in the follwing vectorizing and writing into a dataframe
+			#in the follwing vectorizing and writing into a dictionary
 			X = vectorizer.fit_transform(url_corpus).toarray()
 			dictionary={col:X[:,i] for i,col in enumerate(vectorizer.get_feature_names())}
-			dictionary['news_date']=old_dates
-			dataf=pd.DataFrame(dictionary).set_index('news_date')
+		#writing into dataframe
+		dictionary['news_date']=old_dates
+		dataf=pd.DataFrame(dictionary).set_index('news_date')
 
 		#deleting empty days
+		droppers=[ind_row for ind_row,row in dataf.iterrows() if sum(row)==0.0]#abs(dataf.iloc[row_ind]))==0.0]
+		dataf.drop(droppers,inplace=True)
 
-
-		droppers=[row_ind for row_ind in range(len(dataf)) if sum(abs(dataf.iloc[row_ind]))==0.0]
-		print(droppers)
-		#temp_len=len(dataf)
-		#for row_ind in range(temp_len):
-		#	rev_ind=temp_len-row_ind-1
-		#	if sum(abs(dataf.iloc[rev_ind]))==0.0:
-		dataf.drop(droppers)
 		#populating the dataset attributes and setting these attributes to True because now the newly 
 		#added urls have been processed and the data is up-to-date
 		if vectrz=='tfidf':
@@ -261,6 +252,7 @@ class CorpusGDELT:
 			self.vect_corpus_bow=dataf
 			self.vect_bow_uptodate=(True,daterange)
 		elif vectrz=='word2vec':
+			dataf=dataf.div(np.sqrt((dataf**2).sum(axis=1)), axis=0) #normalizing
 			self.word2vec_corpus=dataf
 			self.word2vec_uptodate=(True,daterange,size_w2v)
 		return
