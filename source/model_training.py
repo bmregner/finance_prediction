@@ -133,9 +133,9 @@ def model_init_class(classifier,parm):
 	elif classifier in {MLPClassifier,}:
 		model=classifier(activation=parm[0],hidden_layer_sizes=parm[1])
 	elif classifier in {AdaBoostClassifier,}:
-		model=classifier(n_estimators=parm)
+		model=classifier(n_estimators=parm[0])
 	elif classifier in {KNeighborsClassifier,}:
-		model=classifier(n_neighbors=parm)
+		model=classifier(n_neighbors=parm[0])
 	elif classifier in {SVC,}:
 		model=classifier(C=parm[0],kernel=parm[1])
 	else:
