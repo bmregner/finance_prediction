@@ -76,6 +76,20 @@ def nextday(today):
 	today=datetime.date(int(today[:4]),int(today[4:6]),int(today[6:]))
 	return (today+datetime.timedelta(days=1)).strftime("%Y%m%d")
 
+def is_tomorrow_mon(today):
+	today=datetime.date(int(today[:4]),int(today[4:6]),int(today[6:]))
+	if today.weekday() == 6:
+		return 1
+	else:
+		return 0
+
+def is_tomorrow_we(today):
+	today=datetime.date(int(today[:4]),int(today[4:6]),int(today[6:]))
+	if today.weekday() in {4,5}:
+		return 1
+	else:
+		return 0
+
 def search_space_builder(parm_ranges,graininess=10):
 	search_space=[]
 	for param in parm_ranges:
@@ -261,7 +275,13 @@ class StockPrediction:
 		"""
 		sp=self.sp500
 		today=dataframe.index[-1]
-		after_weekend=0.
+		if is_tomorrow_we(today):
+			print("I can't predict for tomorrow, because the stock market is closed")
+			raise Exception
+		if is_tomorrow_mon(today):
+			after_weekend=1.
+		else:
+			after_weekend=0.
 		x_row=[list(dataframe.loc[today])+[after_weekend,float(sp[today][-2])]]
 		return np.array(x_row)
 

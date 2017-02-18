@@ -20,7 +20,7 @@ todays_date_str=todays_date.strftime("%Y%m%d")
 yesterday_str=yesterday.strftime("%Y%m%d")
 hundred_days_ago_str=hundred_days_ago.strftime("%Y%m%d")
 
-print("Today's date is",todays_date,". Let's start by loading the data for the last 100 days, ok?")
+print("Today's date (or the latest date available) is",todays_date,". Let's start by loading the data for the last 50 days, ok?")
 
 gdelt=nlpp.CorpusGDELT(datadirec=datadir,min_ment=300)
 gdelt.load_urls(hundred_days_ago_str,yesterday_str)
@@ -35,14 +35,14 @@ trainer=mdlt.StockPrediction([['word2vec'],[gdelt.word2vec_corpus],[gdelt.w2vec_
 
 print("And now we're gonna make our prediction!")
 
-out=trainer.auto_ts_val_test_reg('word2vec',100,'lasso',[['alpha',[0.2,5.0,1.2]]],parm_search_iter=15,n_folds_val=10,n_folds_test=10,max_test_frac=0.2,scaling=False,differential=False,one_shot=True,verbose=True,notest=True)
+out=trainer.auto_ts_val_test_reg('word2vec','lasso',[['alpha',[0.2,5.0,1.2]]],parm_search_iter=15,n_folds_val=10,n_folds_test=10,scaling=False,differential=False,one_shot=True,verbose=False,notest=True)
 
-print('predicted s&p500 closing for today:',out[0])
+print('Predicted s&p500 closing for today:',out[0],'. Enjoy your millions.')
 
 res=trainer.models['word2vec'].coef_[:32]
 w2vec_model=trainer.w2v_models['word2vec']
-print(w2vec_model[res])
-print(w2vec_model[-res])
+#print(w2vec_model[res])
+#print(w2vec_model[-res])
 
 
 
