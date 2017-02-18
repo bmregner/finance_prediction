@@ -11,7 +11,9 @@ Team: Andrea Massari, Daisy Zheng, Saina Lajevardi
 ---
 A thorough walkthrough can be found in the notebooks/ directory
 An automated script, "try_me_script.py", can be run from command line from this home directory with 
-> python3 try_me_script.py
+```
+python3 try_me_script.py
+```
 N.B. several requirements are needed, we will improve the portability of this code in the near future
 
 ## Road map
