@@ -9,7 +9,8 @@ Team: Andrea Massari, Daisy Zheng, Saina Lajevardi
 
 ## Usage
 ---
-A thorough walkthrough can be found in the notebooks/ directory
+A thorough walkthrough can be found in the notebooks/ directory.
+
 An automated script, "try_me_script.py", can be run from command line from this home directory with 
 ```
 python3 try_me_script.py
