@@ -86,7 +86,7 @@ class CorpusGDELT:
 		new_dates=[]
 		for date in rrule(DAILY, dtstart=date1, until=date2):
 			datestr=date.strftime("%Y%m%d")
-			if datestr not in self.dates and int(datestr[:6])>201303:#earliest available date is 20130401
+			if datestr not in self.dates and int(datestr[:6])>201303 and datestr not in {'20140123','20140124','20140125'}:#earliest available date is 20130401
 				new_dates+=[datestr]
 		return new_dates
 
