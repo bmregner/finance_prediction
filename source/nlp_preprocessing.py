@@ -55,7 +55,7 @@ class CorpusGDELT:
 			self.minimum_ment=1
 		else:
 			self.minimum_ment=min_ment
-		#the following attributes all store NLP processing choices, which for now are not left free for the
+		#the following attributes all store NLP processing settins/choices, which for now are not left free for the
 		# user to set. Used in the url_tokenizer method
 		self.re_tokenizer = RegexpTokenizer(r'\w+')
 		self.punctuation = re.compile(r'[-.?!,":;()|0-9]')
@@ -64,6 +64,7 @@ class CorpusGDELT:
 		self.vowels = list("aeiouy")
 		self.consonants = list("bcdfghjklmnpqrstvwxz")
 		self.spurious_beginnings = re.compile(r'idind.|idus.|iduk.')
+		#this is for loading the csv files seamlessly (no warnings)
 		self._dtypes={8:str,9:str,10:str,11:str,12:str,13:str,14:str,18:str,19:str,20:str,21:str,23:str,24:str,26:str,27:str,28:str,40:str,47:str,54:str}
 		return
 
@@ -193,11 +194,10 @@ class CorpusGDELT:
 		"""
 		wordlist=[]
 		for url in url_doc:
-			for mentions in range(url[0]):
-				wordlist+=self.url_tokenizer(url[1])
+			wordlist+=self.url_tokenizer(url[1])*url[0]
 		return wordlist
 
-	def gdelt_preprocess(self,vectrz='word2vec',size_w2v=20,daterange='all'):
+	def gdelt_preprocess(self,vectrz='word2vec',size_w2v=20,daterange='all',verbose=1):
 		"""
 		This is the vectorizer! It can be called with bag of words, tfidf or word2vec approach. 
 		It populates the "corpus" fields of the class with dataframes processing from the url corpus.
@@ -216,12 +216,13 @@ class CorpusGDELT:
 			old_dates=self.old_dateparser(daterange[0],daterange[1])
 			url_corpus=[datedoc[1] for i,date_doc in enumerate(zip(self.dates,self.url_corpus)) if date_doc[0] in old_dates]
 		else:
-			print("optional parameter 'daterange' was not entered according to the correct format: e.g.['20140520',20140615]")			
+			print("optional parameter 'daterange' was not entered according to the correct format: e.g.['20140520',20140615]")
+			return			
 
 		#word2vec!
 		if vectrz=='word2vec':
 			corpus=[sum([self.url_tokenizer(url[1]) for url in news_day],[]) for news_day in url_corpus]
-			model = gensim.models.Word2Vec(corpus, size=size_w2v, min_count=1)
+			model = gensim.models.Word2Vec(corpus, size=size_w2v, min_count=1,verbose=verbose)
 			self.w2vec_model=model
 			dictionary={}
 			for col in range(size_w2v):
