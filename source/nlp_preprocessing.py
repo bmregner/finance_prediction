@@ -197,7 +197,7 @@ class CorpusGDELT:
 			wordlist+=self.url_tokenizer(url[1])*url[0]
 		return wordlist
 
-	def gdelt_preprocess(self,vectrz='word2vec',size_w2v=20,daterange='all',verbose=1):
+	def gdelt_preprocess(self,vectrz='word2vec',size_w2v=20,daterange='all'):
 		"""
 		This is the vectorizer! It can be called with bag of words, tfidf or word2vec approach. 
 		It populates the "corpus" fields of the class with dataframes processing from the url corpus.
@@ -222,7 +222,7 @@ class CorpusGDELT:
 		#word2vec!
 		if vectrz=='word2vec':
 			corpus=[sum([self.url_tokenizer(url[1]) for url in news_day],[]) for news_day in url_corpus]
-			model = gensim.models.Word2Vec(corpus, size=size_w2v, min_count=1,verbose=verbose)
+			model = gensim.models.Word2Vec(corpus, size=size_w2v, min_count=1)
 			self.w2vec_model=model
 			dictionary={}
 			for col in range(size_w2v):
@@ -243,7 +243,8 @@ class CorpusGDELT:
 		#deleting empty days
 		droppers=[ind_row for ind_row,row in dataf.iterrows() if sum(row)==0.0]#abs(dataf.iloc[row_ind]))==0.0]
 		dataf.drop(droppers,inplace=True)
-
+		#sorting in case dates were loaded in chunks
+		dataf.sort_index(nplace=True)
 		#populating the dataset attributes and setting these attributes to True because now the newly 
 		#added urls have been processed and the data is up-to-date
 		if vectrz=='tfidf':

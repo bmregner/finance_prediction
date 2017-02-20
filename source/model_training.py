@@ -300,8 +300,7 @@ class StockPrediction:
 		sp=self.sp500
 		today=dataframe.index[-1]
 		if is_tomorrow_we(today):
-			print("I can't predict for tomorrow, because the stock market is closed")
-			raise Exception
+			return False
 		if is_tomorrow_mon(today):
 			after_weekend=1.
 		else:
@@ -477,6 +476,7 @@ class StockPrediction:
 		rms_rand_test=np.sqrt((sum((benchmark_model-y_test)**2)/len(y_test)))
 		#aaand these are the rmse performances of the model vs the benchmark
 		if verbose:
+			print("best parameter choices:", parm)
 			print('model_test_rmse:',"%.3f" %rms_mod_test,'benchmark_test_rmse:',"%.3f" %rms_rand_test)
 
 		#here I store the model
@@ -586,8 +586,8 @@ class StockPrediction:
 		else:
 			self.prepare_data(dataset_name,today_pred=False)
 
-			x=self.xdata[dataset_name]
-			y=self.ydata[dataset_name]
+		x=self.xdata[dataset_name]
+		y=self.ydata[dataset_name]
 	
 		return x,y,len(y),n_folds_test
 
@@ -610,6 +610,9 @@ class StockPrediction:
 			return
 
 		if notest:
+			if self.todaysx[dataset_name]==False:
+				print("I can't make a prediction: either tomorrow the stock market will be closed or I don't yet have the news of today. Come back after 6am EST")
+				return
 			x_trval,x_test=x,[]
 			y_trval,y_test=y,[]
 
@@ -644,7 +647,6 @@ class StockPrediction:
 		dataset_name=self._dataset_id_parser(dataset_id)
 
 		y_trainval=self.ydata[dataset_name][0][:,1]
-
 		x_trainval=self._xretrieval(dataset_name,scaling=scaling)[0]
 		
 		if time_srs:
@@ -694,7 +696,7 @@ class StockPrediction:
 		scores_flat=np.array(scores(y_test,np.array([sum(y_trainval)/len(y_trainval)]),[thres])[:3])
 		#aaand these are the rmse performances of the model vs the benchmark
 		if verbose:
-			print(parm)
+			print("best parameter choices:", parm)
 			print('test_rec,prec,F1:',list(scores_test),'benchmark_rec,prec,F1:',list(scores_flat))
 		
 		#here I store the model
@@ -720,6 +722,9 @@ class StockPrediction:
 			return
 
 		if notest:
+			if self.todaysx[dataset_name]==False:
+				print("I can't make a prediction: either tomorrow the stock market will be closed or I don't yet have the news of today. Come back after 6am EST")
+				return			
 			x_trval,x_test=x,[]
 			y_trval,y_test=y,[]
 
