@@ -2,7 +2,7 @@
 ----
 Hello, congratulations on extracting this folder from the archive, you're in good shape.
 
-1) cd into the finance_learning/ directory
+1) cd into the finance_learning_tool/ directory
 
 2) type and run "python3 try_me_script.py" in the command line
 
