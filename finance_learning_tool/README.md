@@ -4,8 +4,10 @@ Hello, congratulations on extracting this folder from the archive, you're in goo
 
 1) cd into the finance_learning_tool/ directory
 
-2) type and run "python3 guess_sp500_tool.py" in the command line
-
+2) type and run in the command line
+```
+python3 guess_sp500_tool.py
+```
 3) sit back and enjoy, but be aware that the first time you use this, there will be quite a lot of downloading happening
 
 ## Requirements
