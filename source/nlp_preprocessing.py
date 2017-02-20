@@ -244,7 +244,7 @@ class CorpusGDELT:
 		droppers=[ind_row for ind_row,row in dataf.iterrows() if sum(row)==0.0]#abs(dataf.iloc[row_ind]))==0.0]
 		dataf.drop(droppers,inplace=True)
 		#sorting in case dates were loaded in chunks
-		dataf.sort_index(nplace=True)
+		dataf.sort_index(inplace=True)
 		#populating the dataset attributes and setting these attributes to True because now the newly 
 		#added urls have been processed and the data is up-to-date
 		if vectrz=='tfidf':
