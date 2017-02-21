@@ -308,7 +308,8 @@ class StockPrediction:
 			after_weekend=0.
 		tomorrow=nextday(today)
 		if tomorrow not in sp.keys():
-			today=nextday(today,-2)
+			while today not in sp.keys():
+				today=nextday(today,-1)
 		sp_tod=float(sp[today][-2])
 		sp_yest=float(sp[sp[today][-1]][-2])
 		sp_yyest=float(sp[sp[sp[today][-1]][-1]][-2])
@@ -326,12 +327,12 @@ class StockPrediction:
 			return [[False]]
 		tomorrow=nextday(today)
 		if tomorrow not in sp.keys():
-			today=nextday(today,-2)
+			while today not in sp.keys():
+				today=nextday(today,-1)
 		sp_tod=float(sp[today][-2])
 		sp_yyyest=float(sp[sp[sp[sp[today][-1]][-1]][-1]][-2])
 		y_row=[sp_tod,sp_yyyest]
 		return np.array(y_row)
-
 
 	def _prepare_x(self,dataframe,days):
 		"""
@@ -407,7 +408,7 @@ class StockPrediction:
 		self._testmode[dataset_name]=True #please take care of this inconsistency
 		return
 
-	def _xretrieval(self,dataset_name,scaling,eqdiff=False):
+	def _xretrieval(self,dataset_name,eqdiff=False):
 		"""
 		This helper method loads and possibly scales the x datasets
 		"""
@@ -428,23 +429,143 @@ class StockPrediction:
 			x_trainval=x_trainval[:,:-2]
 			if len(x_test)>0:
 				x_test=x_test[:,:-2]
+
+		return x_trainval, x_test, y_flat
+
+	def _atomic_trainer(self,regclass,ml_alg,minmax_parm,past_depth,x_trval,y_trval,todaysx,dataset_name,todaysyaux=None,differential=False,scaling=False,eqdiff=False):
+		"""
+		This helper method performs a one shot model training
+		"""
+		if regclass=='reg':
+			model=model_init_reg(ml_alg,minmax_parm)
+			if eqdiff:
+				y_trainval=y_trval[-past_depth:,3]
+			elif differential:
+				y_trainval=y_trval[-past_depth:,2]
+			else:
+				y_trainval=y_trval[-past_depth:,0]
+
+			if eqdiff:
+				x_trval=np.concatenate([x_trval[:,:-4],x_trval[:,-2:]],axis=1)
+			else:
+				x_trval=x_trval[:,:-2]
+		elif regclass=='class':
+			model=model_init_class(ml_alg,minmax_parm)
+			y_trainval=y_trval[-past_depth:,1]
+
+		x_trainval=x_trval[-past_depth:]
+		
 		if scaling:
-			x_trainval=scale(x_trainval)
-			if len(x_test)>0:
-				x_test=scale(x_test)
-		return x_trainval, x_test,y_flat
+			scaled_x=scale(np.concatenate([x_trainval,todaysx]))
+			x_trainval=scaled_x[:-1]
+			todaysx=scaled_x[-1:]
+
+		model.fit(x_trainval,y_trainval)
+		self.models[dataset_name]=model
+
+		yhat=model.predict(todaysx)
+
+		if eqdiff:
+			yhat=yhat-todaysyaux[1]
+		elif differential:
+			yhat=yhat+todaysyaux[0]
+
+		return yhat
+
+	def _auto_ts_val_test_preamble(self,dataset_name,notest,n_folds_test):
+		"""
+		This helper method simply calls the appropriate data preparations
+		"""
+		if notest:
+			self.prepare_data(dataset_name,today_pred=True)
+			n_folds_test=0 #in case the user is distracted...
+		else:
+			self.prepare_data(dataset_name,today_pred=False)
+
+		x=self.xdata[dataset_name]
+		y=self.ydata[dataset_name]
+	
+		return x,y,len(y),n_folds_test
+
+	def _auto_kfold_reg(self,x_trval,x_test,y_trval,y_test,parm_search_iter,parm_ranges,verbose,n_folds_val,past_depth,dataset_id,dataset_name,regressor,differential=False,scaling=False,eqdiff=False):
+		"""
+		This helper method performs automatic validation and tuning of hyperparameters
+		"""
+		self.xdata[dataset_name]=(x_trval,x_test)
+		self.ydata[dataset_name]=(y_trval,y_test)
+		self._testmode[dataset_name]=True
+
+		min_err=10**9
+		val_fold=0
+		any_change=True
+		#this condition determines when to stop optimizing
+		while val_fold <parm_search_iter and (any_change or val_fold<8):
+			any_change=False
+			current_search_space=search_space_builder(parm_ranges,graininess=10)
+			for parm in current_search_space:
+				if verbose:
+					print(parm)
+				avg_rms_mod_val=self.kfold_val_reg(n_folds_val,past_depth,dataset_id,regressor,list(parm),differential=differential,scaling=scaling,eqdiff=eqdiff,verbose=verbose)
+				if min_err>avg_rms_mod_val:
+					min_err=avg_rms_mod_val
+					min_parm=parm
+					any_change=True
+			val_fold+=1
+			for i,param in enumerate(parm_ranges):
+				if isinstance(param[1],list) and len(param[1])==3:
+					param[1][2]=min_parm[i]
+			parm_ranges=new_parm_ranges(parm_ranges,graininess=10)
+		return min_parm
+
+	def _auto_kfold_class(self,x_trval,x_test,y_trval,y_test,parm_search_iter,parm_ranges,verbose,n_folds_val,past_depth,dataset_id,dataset_name,classifier,scaling=False):
+		"""
+		This helper method performs automatic validation and tuning of hyperparameters
+		"""
+		self.xdata[dataset_name]=(x_trval,x_test)
+		self.ydata[dataset_name]=(y_trval,y_test)
+		self._testmode[dataset_name]=True
+
+		max_score=0.
+		val_fold=0
+		any_change=True
+		max_parm=[]
+		for parm_range in parm_ranges:
+			if isinstance(parm_range[1],list):
+				max_parm+=[parm_range[1][2]]
+			elif isinstance(parm_range[1],set):
+				max_parm+=[list(parm_range[1])[0]]
+			else:
+				raise KeyError
+
+		while val_fold <parm_search_iter and (any_change or val_fold<8):
+			any_change=False
+			current_search_space=search_space_builder(parm_ranges,graininess=10)
+			for parm in current_search_space:
+				if verbose:
+					print(parm)
+				avg_scores_val=self.kfold_val_class(n_folds_val,past_depth,dataset_id,classifier,list(parm),verbose=verbose,thres=0.5,scaling=scaling)
+				avg_score_val=avg_scores_val[2] #hard-coded to optimize F1
+				if max_score<avg_score_val:
+					max_score=avg_score_val
+					max_parm=parm
+					any_change=True
+			val_fold+=1
+			for i,param in enumerate(parm_ranges):
+				if isinstance(param[1],list) and len(param[1])==3:
+					param[1][2]=max_parm[i]
+			parm_ranges=new_parm_ranges(parm_ranges,graininess=10)
+		return max_parm
 
 	def kfold_val_reg(self,n_folds_val,past_depth,dataset_id,regressor,parm,eqdiff=False,differential=False,scaling=False,verbose=True):
 		"""
 		This method performs a k-fold validation of a regression model on a certain dataset labelled by 
 		'dataset_id', with a certain regressor, with certain parameters 'parm', distinguishing between a
 		full tomorrow's value prediction and a tomorrow's increment prediction (argument differential).
-		Scaling of (all) the features is also available.
-		Example input: kfold_val_reg(10,15,'apriltodectfidf','lasso',1.3,differential=True,scaling=True)
+		Example input: kfold_val_reg(10,15,'apriltodectfidf','lasso',1.3,differential=True)
 		"""
 		dataset_name=self._dataset_id_parser(dataset_id)
 
-		x_trainval=self._xretrieval(dataset_name,scaling=scaling,eqdiff=eqdiff)[0]
+		x_trainval=self._xretrieval(dataset_name,eqdiff=eqdiff)[0]
 		numb_datapoints=len(x_trainval)
 
 		if numb_datapoints-n_folds_val-past_depth<0:
@@ -464,15 +585,20 @@ class StockPrediction:
 		break_indices=[numb_datapoints-n_folds_val+i for i in range(n_folds_val)]
 
 		for i in break_indices:
-			x_train, x_val = x_trainval[i-past_depth:i], x_trainval[i:i+1]
+			x_trainval_temp=x_trainval[i-past_depth:i+1]
+
+			if scaling:
+				x_trainval_temp=scale(x_trainval_temp)
+			
+			x_train, x_val = x_trainval_temp[:-1], x_trainval_temp[-1:]
 			y_train, y_val = y_trainval[i-past_depth:i], y_trainval[i:i+1]
 			#parsing parameters and initializing model, given the chosen regressor
 			model=model_init_reg(regressor,parm)
 
 			model.fit(x_train,y_train)
 			#storing the train/validation rmse performances
-			avg_rms_mod_val+=np.sqrt((sum((model.predict(x_val)-y_val)**2)/len(y_val)))
 			avg_rms_mod_train+=np.sqrt((sum((model.predict(x_train)-y_train)**2)/len(y_train)))
+			avg_rms_mod_val+=np.sqrt((sum((model.predict(x_val)-y_val)**2)/len(y_val)))
 		#averaging over the several folds
 		avg_rms_mod_val=avg_rms_mod_val/n_folds_val
 		avg_rms_mod_train=avg_rms_mod_train/n_folds_val
@@ -488,7 +614,7 @@ class StockPrediction:
 		"""
 		dataset_name=self._dataset_id_parser(dataset_id)
 
-		x_trainval, x_test, y_flat = self._xretrieval(dataset_name,scaling=scaling,eqdiff=eqdiff)
+		x_trainval, x_test, y_flat = self._xretrieval(dataset_name,eqdiff=eqdiff)
 
 		if eqdiff:
 			y_trainval=self.ydata[dataset_name][0][:,3]
@@ -499,6 +625,11 @@ class StockPrediction:
 		else:
 			y_trainval=self.ydata[dataset_name][0][:,0]
 		y_test=self.ydata[dataset_name][1][:,0]
+
+		if scaling:
+			scaled_x=scale(np.concatenate([x_trainval, x_test]))
+			x_trainval=scaled_x[:-1]
+			x_test=scaled_x[-1:]
 
 		model=model_init_reg(regressor,parm)
 		model.fit(x_trainval,y_trainval)
@@ -526,120 +657,6 @@ class StockPrediction:
 		self.models[dataset_name]=model
 		return rms_mod_test,rms_bench_test
 
-	def _auto_kfold_reg(self,x_trval,x_test,y_trval,y_test,parm_search_iter,parm_ranges,verbose,n_folds_val,past_depth,dataset_id,dataset_name,regressor,differential,scaling,eqdiff):
-		"""
-		This helper method performs automatic validation and tuning of hyperparameters
-		"""
-		self.xdata[dataset_name]=(x_trval,x_test)
-		self.ydata[dataset_name]=(y_trval,y_test)
-		self._testmode[dataset_name]=True
-
-		min_err=10**9
-		val_fold=0
-		any_change=True
-		#this condition determines when to stop optimizing
-		while val_fold <parm_search_iter and (any_change or val_fold<8):
-			any_change=False
-			current_search_space=search_space_builder(parm_ranges,graininess=10)
-			for parm in current_search_space:
-				if verbose:
-					print(parm)
-				avg_rms_mod_val=self.kfold_val_reg(n_folds_val,past_depth,dataset_id,regressor,list(parm),differential=differential,scaling=scaling,verbose=verbose,eqdiff=eqdiff)
-				if min_err>avg_rms_mod_val:
-					min_err=avg_rms_mod_val
-					min_parm=parm
-					any_change=True
-			val_fold+=1
-			for i,param in enumerate(parm_ranges):
-				if isinstance(param[1],list) and len(param[1])==3:
-					param[1][2]=min_parm[i]
-			parm_ranges=new_parm_ranges(parm_ranges,graininess=10)
-		return min_parm
-
-	def _auto_kfold_class(self,x_trval,x_test,y_trval,y_test,parm_search_iter,parm_ranges,verbose,n_folds_val,past_depth,dataset_id,dataset_name,classifier,scaling):
-		"""
-		This helper method performs automatic validation and tuning of hyperparameters
-		"""
-		self.xdata[dataset_name]=(x_trval,x_test)
-		self.ydata[dataset_name]=(y_trval,y_test)
-		self._testmode[dataset_name]=True
-
-		max_score=0.
-		val_fold=0
-		any_change=True
-		max_parm=[]
-		for parm_range in parm_ranges:
-			if isinstance(parm_range[1],list):
-				max_parm+=[parm_range[1][2]]
-			elif isinstance(parm_range[1],set):
-				max_parm+=[list(parm_range[1])[0]]
-			else:
-				raise KeyError
-
-		while val_fold <parm_search_iter and (any_change or val_fold<5):
-			any_change=False
-			current_search_space=search_space_builder(parm_ranges,graininess=10)
-			for parm in current_search_space:
-				if verbose:
-					print(parm)
-				avg_scores_val=self.kfold_val_class(n_folds_val,past_depth,dataset_id,classifier,list(parm),scaling=scaling,verbose=verbose,thres=0.5)
-				avg_score_val=avg_scores_val[2] #hard-coded to optimize F1
-				if max_score<avg_score_val:
-					max_score=avg_score_val
-					max_parm=parm
-					any_change=True
-			val_fold+=1
-			for i,param in enumerate(parm_ranges):
-				if isinstance(param[1],list) and len(param[1])==3:
-					param[1][2]=max_parm[i]
-			parm_ranges=new_parm_ranges(parm_ranges,graininess=10)
-		return max_parm
-
-	def _atomic_trainer(self,regclass,ml_alg,minmax_parm,past_depth,x_trval,y_trval,dataset_name,scaling=False,differential=False,eqdiff=False):
-		"""
-		This helper method performs a one shot model training
-		"""
-		if regclass=='reg':
-			model=model_init_reg(ml_alg,minmax_parm)
-			if eqdiff:
-				y_trainval=y_trval[-past_depth:,3]
-			elif differential:
-				y_trainval=y_trval[-past_depth:,2]
-			else:
-				y_trainval=y_trval[-past_depth:,0]
-
-			if eqdiff:
-				x_trval=np.concatenate([x_trval[:,:-4],x_trval[:,-2:]],axis=1)
-			else:
-				x_trval=x_trval[:,:-2]
-		elif regclass=='class':
-			model=model_init_class(ml_alg,minmax_parm)
-			y_trainval=y_trval[-past_depth:,1]
-
-		if scaling:
-			x_trainval=scale(x_trval[-past_depth:])
-		else:	
-			x_trainval=x_trval[-past_depth:]
-		
-		model.fit(x_trainval,y_trainval)
-		self.models[dataset_name]=model
-		return model
-
-	def _auto_ts_val_test_preamble(self,dataset_name,notest,n_folds_test):
-		"""
-		This helper method simply calls the appropriate data preparations
-		"""
-		if notest:
-			self.prepare_data(dataset_name,today_pred=True)
-			n_folds_test=0 #in case the user is distracted...
-		else:
-			self.prepare_data(dataset_name,today_pred=False)
-
-		x=self.xdata[dataset_name]
-		y=self.ydata[dataset_name]
-	
-		return x,y,len(y),n_folds_test
-
 	def auto_ts_val_test_reg(self,dataset_id,regressor,parm_ranges,parm_search_iter=5,n_folds_val=5,past_depth=5,n_folds_test=5,scaling=False,differential=False,eqdiff=False,verbose=False,notest=False):
 		"""
 		This method performs a full-fledged automated training, validation, tuning, and testing.
@@ -653,7 +670,7 @@ class StockPrediction:
 		"""
 		dataset_name=self._dataset_id_parser(dataset_id)
 		x,y,numb_datapoints,n_folds_test=self._auto_ts_val_test_preamble(dataset_name,notest,n_folds_test)
-
+		
 		if numb_datapoints-n_folds_test-past_depth-n_folds_val<0:
 			print('Please choose a smaller maximum test fraction, not enough data...')
 			return
@@ -670,19 +687,11 @@ class StockPrediction:
 			else:
 				todaysx=todaysx[:,:-2]
 
-			if scaling:
-				todaysx=scale(todaysx)
-
 			x_trval,x_test=x,[]
 			y_trval,y_test=y,[]
 
 			min_parm=self._auto_kfold_reg(x_trval,x_test,y_trval,y_test,parm_search_iter,parm_ranges,verbose,n_folds_val,past_depth,dataset_id,dataset_name,regressor,differential=differential,scaling=scaling,eqdiff=eqdiff)
-			model=self._atomic_trainer('reg',regressor,min_parm,past_depth,x_trval,y_trval,dataset_name,scaling=scaling,differential=differential,eqdiff=eqdiff)
-			yhat=model.predict(todaysx)
-			if eqdiff:
-				yhat=yhat-todaysyaux[1]
-			elif differential:
-				yhat=yhat+todaysyaux[0]
+			yhat=self._atomic_trainer('reg',regressor,min_parm,past_depth,x_trval,y_trval,todaysx,dataset_name,todaysyaux=todaysyaux,differential=differential,scaling=scaling,eqdiff=eqdiff)
 			return yhat
 
 		break_indices=[numb_datapoints-n_folds_test+i for i in range(n_folds_test)]
@@ -715,7 +724,7 @@ class StockPrediction:
 			print('too few datapoints, given the validation settings!')
 			return
 
-		x_trainval=self._xretrieval(dataset_name,scaling=scaling)[0]
+		x_trainval=self._xretrieval(dataset_name)[0]
 
 		avg_scores_train=np.zeros(3)
 		avg_scores_val=np.zeros(3)
@@ -723,7 +732,12 @@ class StockPrediction:
 		break_indices=[numb_datapoints-n_folds_val+i for i in range(n_folds_val)]
 
 		for i in break_indices:
-			x_train, x_val = x_trainval[i-past_depth:i], x_trainval[i:i+1]
+			x_trainval_temp=x_trainval[i-past_depth:i+1]
+
+			if scaling:
+				x_trainval_temp=scale(x_trainval_temp)
+			
+			x_train, x_val = x_trainval_temp[:-1], x_trainval_temp[-1:]
 			y_train, y_val = y_trainval[i-past_depth:i], y_trainval[i:i+1]	
 
 			model=model_init_class(classifier,parm)
@@ -738,7 +752,7 @@ class StockPrediction:
 			print('avg_train_rec,prec,F1:',list(avg_scores_train),'avg_validation_rec,prec,F1:',list(avg_scores_val))
 		return avg_scores_val
 
-	def kfold_test_class(self,dataset_id,classifier,parm,thres=0.5,scaling=False,verbose=True):
+	def kfold_test_class(self,dataset_id,classifier,parm,thres=0.5,verbose=True,scaling=False):
 		"""
 		Once a model is finally picked, given its performance on the validation sets (model tuning),
 		we should see how it performs on the never-seen-before test set. This is what the method does.
@@ -746,10 +760,15 @@ class StockPrediction:
 		"""
 		dataset_name=self._dataset_id_parser(dataset_id)
 
-		x_trainval, x_test = self._xretrieval(dataset_name,scaling=scaling)[:2]
+		x_trainval, x_test = self._xretrieval(dataset_name)[:2]
 
 		y_trainval=self.ydata[dataset_name][0][:,1]
 		y_test=self.ydata[dataset_name][1][:,1]
+
+		if scaling:
+			scaled_x=scale(np.concatenate([x_trainval, x_test]))
+			x_trainval=scaled_x[:-1]
+			x_test=scaled_x[-1:]
 
 		model=model_init_class(classifier,parm)
 
@@ -757,16 +776,16 @@ class StockPrediction:
 
 		self.yhat_class[dataset_name]=model.predict(x_test)
 		scores_test=np.array(scores(y_test,self.yhat_class[dataset_name],[thres])[:3])
-		scores_flat=np.array(scores(y_test,np.array([sum(y_trainval)/len(y_trainval)]),[thres])[:3])
+		scores_bench=np.array(scores(y_test,np.array([sum(y_trainval)/len(y_trainval)]),[thres])[:3])
 		#aaand these are the rmse performances of the model vs the benchmark
 		if verbose:
 			print("best parameter choices:", parm)
-			print('test_rec,prec,F1:',list(scores_test),'benchmark_rec,prec,F1:',list(scores_flat))
+			print('test_rec,prec,F1:',list(scores_test),'benchmark_rec,prec,F1:',list(scores_bench))
 		
 		#here I store the model
 		self.models[dataset_name]=model
 
-		return [scores_test],[scores_flat]
+		return [scores_test],[scores_bench]
 
 	def auto_ts_val_test_class(self,dataset_id,classifier,parm_ranges,parm_search_iter=5,n_folds_val=5,past_depth=5,n_folds_test=5,scaling=False,verbose=False,notest=False):
 		"""
@@ -781,6 +800,11 @@ class StockPrediction:
 		dataset_name=self._dataset_id_parser(dataset_id)
 		x,y,numb_datapoints,n_folds_test=self._auto_ts_val_test_preamble(dataset_name,notest,n_folds_test)
 
+		#print(numb_datapoints)
+		#print(n_folds_test)
+		#print(past_depth)
+		#print(n_folds_val)
+
 		if numb_datapoints-n_folds_test-past_depth-n_folds_val<0:
 			print('Please choose a smaller maximum test fraction, not enough data...')
 			return
@@ -794,9 +818,8 @@ class StockPrediction:
 			y_trval,y_test=y,[]
 
 			max_parm=self._auto_kfold_class(x_trval,x_test,y_trval,y_test,parm_search_iter,parm_ranges,verbose,n_folds_val,past_depth,dataset_id,dataset_name,classifier,scaling=scaling)
-			model=self._atomic_trainer('class',classifier,max_parm,past_depth,x_trval,y_trval,dataset_name,scaling=scaling)
-
-			return model.predict(todaysx)
+			yhat=self._atomic_trainer('class',classifier,max_parm,past_depth,x_trval,y_trval,todaysx,dataset_name,scaling=scaling)
+			return yhat
 
 		break_indices=[numb_datapoints-n_folds_test+i for i in range(n_folds_test)]
 		performances=[]
@@ -805,7 +828,7 @@ class StockPrediction:
 			y_trval,y_test=y[:break_index],y[break_index:break_index+1]
 
 			max_parm=self._auto_kfold_class(x_trval,x_test,y_trval,y_test,parm_search_iter,parm_ranges,verbose,n_folds_val,past_depth,dataset_id,dataset_name,classifier,scaling=scaling)
-			res=self.kfold_test_class(dataset_id,classifier,max_parm,scaling=scaling,thres=0.5)
+			res=self.kfold_test_class(dataset_id,classifier,max_parm,thres=0.5,scaling=scaling)
 			performances+=[res]
 
 		return list(zip(np.mean(performances,axis=0),np.std(performances,axis=0)))
