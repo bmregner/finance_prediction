@@ -306,10 +306,8 @@ class StockPrediction:
 			after_weekend=1.
 		else:
 			after_weekend=0.
-		tomorrow=nextday(today)
-		if tomorrow not in sp.keys():
-			while today not in sp.keys():
-				today=nextday(today,-1)
+		while today not in sp.keys():
+			today=nextday(today,-1)
 		sp_tod=float(sp[today][-2])
 		sp_yest=float(sp[sp[today][-1]][-2])
 		sp_yyest=float(sp[sp[sp[today][-1]][-1]][-2])
@@ -325,10 +323,8 @@ class StockPrediction:
 		today=dataframe.index[-1]
 		if is_tomorrow_we(today):
 			return [[False]]
-		tomorrow=nextday(today)
-		if tomorrow not in sp.keys():
-			while today not in sp.keys():
-				today=nextday(today,-1)
+		while today not in sp.keys():
+			today=nextday(today,-1)
 		sp_tod=float(sp[today][-2])
 		sp_yyyest=float(sp[sp[sp[sp[today][-1]][-1]][-1]][-2])
 		y_row=[sp_tod,sp_yyyest]
